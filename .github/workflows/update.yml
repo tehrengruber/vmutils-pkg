@@ -1,0 +1,73 @@
+name: Update PKGBUILD
+
+# Checks upstream daily and opens a pull request when there is a new release.
+# Deliberately a PR and not a push: VictoriaMetrics ships breaking changes
+# between releases, so the decision to take one stays with a person. Enable
+# auto-merge on the PR if you would rather it flowed straight through.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to pin (default: latest upstream release)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump to the upstream release
+        id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          before=$(sed -n 's/^pkgver=//p' PKGBUILD)
+          ./update.sh ${{ inputs.version }}
+          after=$(sed -n 's/^pkgver=//p' PKGBUILD)
+          echo "before=$before" >> "$GITHUB_OUTPUT"
+          echo "after=$after"  >> "$GITHUB_OUTPUT"
+          [ "$before" = "$after" ] && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Builds the package for real, in an Arch container, before proposing the
+      # change. This is what catches an upstream that renames or restructures
+      # its release tarball — the failure a checksum bump alone sails straight
+      # past, and which would otherwise surface on the host at deploy time.
+      - name: Build the package
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          docker run --rm -v "$PWD:/pkg" -w /pkg archlinux:base-devel bash -euo pipefail -c '
+            pacman -Syu --noconfirm --needed base-devel
+            useradd -m builder
+            chown -R builder /pkg
+            sudo -u builder makepkg --noconfirm --nodeps
+            for f in usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore; do
+              test -f "pkg/$f" || { echo "missing from the built package: $f"; exit 1; }
+            done
+            echo "built and verified: usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore"
+          '
+
+      - name: Open a pull request
+        if: steps.bump.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: update/${{ steps.bump.outputs.after }}
+          title: "Update to ${{ steps.bump.outputs.after }}"
+          commit-message: "Update to ${{ steps.bump.outputs.after }}"
+          body: |
+            Upstream released ${{ steps.bump.outputs.after }} (was ${{ steps.bump.outputs.before }}).
+
+            pkgver and both checksums come from the GitHub release metadata, and
+            the package built cleanly in an Arch container with the expected
+            files present.
+
+            Read the upstream changelog before merging — VictoriaMetrics ships
+            breaking changes between releases and nothing here warns about them.
+
+            https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v${{ steps.bump.outputs.after }}
