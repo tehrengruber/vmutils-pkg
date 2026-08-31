@@ -45,9 +45,13 @@ release metadata, which publishes a digest per asset, so nothing is downloaded
 in order to be hashed. It exits without touching anything if the version already
 matches.
 
-A scheduled workflow runs the same script every day, builds the result in an
-Arch container, checks all seven binaries are present and opens a pull request
-with the bump. Building — rather than bumping checksums alone — is the part that
-matters: a checksum change would sail straight past an upstream that renamed its
-`-prod` binaries, and that failure would otherwise turn up at install time
-instead of here.
+This runs on its own: a scheduled workflow checks for a new upstream release
+every day and opens a pull request with the bump, skipping it if a pull request
+already proposes that version. The package is built in an Arch container as a
+check on that pull request, and the pull request merges once the check is green.
+
+Building — rather than bumping checksums alone — is the part that matters. A
+checksum change would sail straight past an upstream that renamed its `-prod`
+binaries, and that failure would otherwise turn up at install time instead of
+here. The merged pull request stays as the record of what changed, and the thing
+to revert if a release turns out to break something.
