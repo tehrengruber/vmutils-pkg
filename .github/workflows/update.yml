@@ -54,6 +54,7 @@ jobs:
           '
 
       - name: Open a pull request
+        id: pr
         if: steps.bump.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
@@ -67,7 +68,24 @@ jobs:
             the package built cleanly in an Arch container with the expected
             files present.
 
-            Read the upstream changelog before merging — VictoriaMetrics ships
-            breaking changes between releases and nothing here warns about them.
+            Merged automatically. VictoriaMetrics ships breaking changes
+            between releases, so the changelog is worth a look after the fact —
+            revert this PR if it turns out to matter.
 
             https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v${{ steps.bump.outputs.after }}
+
+      # Merges as soon as the required checks pass — which, since the container
+      # build above runs before the PR is opened, is immediately. The PR remains
+      # as the record of what changed and the thing to revert.
+      #
+      # This is auto-merge rather than an auto-approval: GITHUB_TOKEN cannot
+      # approve a pull request it opened itself. If branch protection here ever
+      # requires a review, this step needs a token belonging to a different
+      # identity than the one that created the PR.
+      - name: Merge it automatically
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge --squash --auto --delete-branch \
+             "${{ steps.pr.outputs.pull-request-number }}"

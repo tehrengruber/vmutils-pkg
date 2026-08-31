@@ -51,7 +51,17 @@ request. The build is the part that matters: a checksum bump alone would sail
 past an upstream that renames its `-prod` binaries, and that failure would
 otherwise surface on the host at deploy time.
 
-It opens a PR rather than pushing, because VictoriaMetrics ships breaking
-changes between releases and that decision belongs to a person. The PR step
-needs *Settings → Actions → General → Allow GitHub Actions to create and approve
-pull requests*.
+The PR is merged automatically once its checks pass, which — since the build
+runs before the PR is opened — is immediately. The pull request stays as the
+record of what changed and the thing to revert if a release turns out to break
+something.
+
+Two repository settings are required:
+
+- *Settings → Actions → General → Allow GitHub Actions to create and approve
+  pull requests*
+- *Settings → General → Pull Requests → Allow auto-merge*
+
+Note this is auto-**merge**, not auto-approval: `GITHUB_TOKEN` cannot approve a
+pull request it opened itself. If branch protection is ever added here requiring
+a review, that step will need a token belonging to a different identity.
