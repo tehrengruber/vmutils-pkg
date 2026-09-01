@@ -42,13 +42,27 @@ jobs:
       - name: Build the package
         if: steps.bump.outputs.changed == 'true'
         run: |
-          docker run --rm -v "$PWD:/pkg" -w /pkg archlinux:base-devel bash -euo pipefail -c '
+          docker run --rm -v "$PWD:/pkg" -w /pkg \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            archlinux:base-devel bash -euo pipefail -c '
             pacman -Syu --noconfirm --needed base-devel
             useradd -m builder
+            # The bind mount is the checkout itself, .git included, so hand
+            # ownership back on the way out: otherwise the workspace is left
+            # owned by the container uid and the runner can no longer write
+            # .git (checkout post-cleanup and create-pull-request both fail).
+            trap "chown -R $HOST_UID:$HOST_GID /pkg" EXIT
             chown -R builder /pkg
             sudo -u builder makepkg --noconfirm --nodeps
+            # makepkg stages into pkg/<pkgname>/, and this PKGBUILD also
+            # produces a -debug package, so inspect the real package
+            # artifact rather than guessing at the staging path.
+            shopt -s nullglob
+            pkgs=(vmutils-[0-9]*.pkg.tar.*)
+            test ${#pkgs[@]} -eq 1 || { echo "expected exactly one vmutils package, got: ${pkgs[*]:-none}"; exit 1; }
+            contents=$(bsdtar -tf "${pkgs[0]}" | sed "s#^\./##")
             for f in usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore; do
-              test -f "pkg/$f" || { echo "missing from the built package: $f"; exit 1; }
+              printf "%s\n" "$contents" | grep -qxF "$f" || { echo "missing from the built package: $f"; exit 1; }
             done
             echo "built and verified: usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore"
           '
