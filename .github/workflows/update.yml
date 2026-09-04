@@ -36,9 +36,28 @@ jobs:
           echo "after=$after"  >> "$GITHUB_OUTPUT"
           [ "$before" = "$after" ] && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      # Only matches the branch this workflow would use, which is all that is
+      # needed to stop it proposing the same version every morning while an
+      # earlier attempt is still open. Open pull requests only: one closed by
+      # hand is a decision, but so is closing one that was merely broken, and
+      # reopening it the next day is the friendlier of the two failure modes.
+      - name: Look for a pull request already proposing this version
+        id: existing
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh pr list --state open \
+                     --head "update/${{ steps.bump.outputs.after }}" \
+                     --json number --jq '.[0].number // ""')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          if [ -n "$number" ]; then
+            echo "#$number already proposes ${{ steps.bump.outputs.after }}; nothing to do"
+          fi
+
       - name: Open a pull request
         id: pr
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.bump.outputs.changed == 'true' && steps.existing.outputs.number == ''
         uses: peter-evans/create-pull-request@v6
         with:
           # A PAT, not GITHUB_TOKEN: a pull request opened with the workflow's
