@@ -78,6 +78,9 @@ jobs:
         if: steps.bump.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
+          # The build ran in this checkout, so the tree is full of sources and
+          # built packages. Only the bump belongs in the commit.
+          add-paths: PKGBUILD
           branch: update/${{ steps.bump.outputs.after }}
           title: "Update to ${{ steps.bump.outputs.after }}"
           commit-message: "Update to ${{ steps.bump.outputs.after }}"

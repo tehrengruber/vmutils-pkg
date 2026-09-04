@@ -1,0 +1,7 @@
+# makepkg builds in place, and CI builds in the checkout itself. None of this
+# belongs in the repository — and the upstream tarball is larger than GitHub
+# will accept at all.
+/src/
+/pkg/
+*.pkg.tar.*
+*.tar.gz
