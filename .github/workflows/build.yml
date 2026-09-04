@@ -1,0 +1,56 @@
+name: Build
+
+# Builds the package for real, in an Arch container. This is what catches an
+# upstream that renames or restructures its release tarball — the failure a
+# checksum bump alone sails straight past, and which would otherwise surface on
+# the host at deploy time.
+#
+# Runs on pull requests so the result is a check on the change itself, which is
+# what the update workflow's auto-merge waits for.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the package
+        run: |
+          docker run --rm -v "$PWD:/pkg" -w /pkg \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            archlinux:base-devel bash -euo pipefail -c '
+            # The image ships no initialised keyring, so the archlinux-keyring
+            # scriptlet fails during the upgrade below ("There is no secret key
+            # available to sign with") and leaves signature checking on a
+            # keyring nobody has vouched for.
+            pacman-key --init
+            pacman-key --populate
+            pacman -Syu --noconfirm --needed base-devel
+            useradd -m builder
+            # The bind mount is the checkout itself, .git included, so hand
+            # ownership back on the way out: otherwise the workspace is left
+            # owned by the container uid and the runner can no longer write
+            # .git (checkout post-cleanup and create-pull-request both fail).
+            trap "chown -R $HOST_UID:$HOST_GID /pkg" EXIT
+            chown -R builder /pkg
+            sudo -u builder makepkg --noconfirm --nodeps
+            # makepkg stages into pkg/<pkgname>/, and this PKGBUILD also
+            # produces a -debug package, so inspect the real package
+            # artifact rather than guessing at the staging path.
+            shopt -s nullglob
+            pkgs=(vmutils-[0-9]*.pkg.tar.*)
+            test ${#pkgs[@]} -eq 1 || { echo "expected exactly one vmutils package, got: ${pkgs[*]:-none}"; exit 1; }
+            contents=$(bsdtar -tf "${pkgs[0]}" | sed "s#^\./##")
+            for f in usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore; do
+              printf "%s\n" "$contents" | grep -qxF "$f" || { echo "missing from the built package: $f"; exit 1; }
+            done
+            echo "built and verified: usr/bin/vmagent usr/bin/vmalert usr/bin/vmalert-tool usr/bin/vmauth usr/bin/vmbackup usr/bin/vmctl usr/bin/vmrestore"
+          '
