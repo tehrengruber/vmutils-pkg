@@ -45,6 +45,12 @@ jobs:
           docker run --rm -v "$PWD:/pkg" -w /pkg \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             archlinux:base-devel bash -euo pipefail -c '
+            # The image ships no initialised keyring, so the archlinux-keyring
+            # scriptlet fails during the upgrade below ("There is no secret key
+            # available to sign with") and leaves signature checking on a
+            # keyring nobody has vouched for.
+            pacman-key --init
+            pacman-key --populate
             pacman -Syu --noconfirm --needed base-devel
             useradd -m builder
             # The bind mount is the checkout itself, .git included, so hand
