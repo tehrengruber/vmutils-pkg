@@ -6,8 +6,8 @@
 # was current when this was written, and victoriametrics-agent, which had been
 # flagged out of date for ten months while still looking like a maintained
 # package. Neither had more than two votes. Packaging it here costs a pkgver
-# and two checksums per release and removes a stranger from the dependency
-# chain of the thing that is supposed to notice when other things break.
+# and two checksums per release (see ./update.sh), which is cheaper than
+# carrying that risk.
 #
 # Binaries only, exactly like vmutils-bin: the vmagent unit is environment
 # specific (remote write target, scrape config), so none is shipped here.
