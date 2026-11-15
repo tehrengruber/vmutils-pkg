@@ -16,9 +16,26 @@ asset_arm64='vmutils-linux-arm64-v%s.tar.gz'
 here=$(cd "$(dirname "$0")" && pwd)
 pkgbuild=$here/PKGBUILD
 
+# Authenticate when a token is available. Anonymous API requests are limited to
+# 60 an hour per IP, and CI runners share their IPs, so in a workflow the
+# anonymous limit is usually already spent (curl: 403). Locally it works
+# without one.
+auth=()
+if [[ -n ${GH_TOKEN:-} ]]; then
+    auth=(-H "Authorization: Bearer $GH_TOKEN")
+fi
+
+api() {
+    curl -sSf "${auth[@]}" -H 'Accept: application/vnd.github+json' \
+         "https://api.github.com/repos/$repo/$1"
+}
+
 version=${1:-}
 if [[ -z $version ]]; then
-    version=$(curl -sSf "https://api.github.com/repos/$repo/releases/latest" |
+    # Fetch first, then parse: in a pipeline a failed request only shows up as
+    # a JSON traceback on empty input.
+    latest=$(api releases/latest)
+    version=$(printf '%s' "$latest" |
               python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
 fi
 
@@ -28,7 +45,7 @@ if [[ $current == "$version" ]]; then
     exit 0
 fi
 
-release=$(curl -sSf "https://api.github.com/repos/$repo/releases/tags/v$version")
+release=$(api "releases/tags/v$version")
 
 digest_of() {
     printf '%s' "$release" | python3 -c '
