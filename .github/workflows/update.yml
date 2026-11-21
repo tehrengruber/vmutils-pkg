@@ -20,79 +20,13 @@ permissions:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Bump to the upstream release
-        id: bump
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          before=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          ./update.sh ${{ inputs.version }}
-          after=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          echo "before=$before" >> "$GITHUB_OUTPUT"
-          echo "after=$after"  >> "$GITHUB_OUTPUT"
-          [ "$before" = "$after" ] && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      # Only matches the branch this workflow would use, which is all that is
-      # needed to stop it proposing the same version every morning while an
-      # earlier attempt is still open. Open pull requests only: one closed by
-      # hand is a decision, but so is closing one that was merely broken, and
-      # reopening it the next day is the friendlier of the two failure modes.
-      - name: Look for a pull request already proposing this version
-        id: existing
-        if: steps.bump.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          number=$(gh pr list --state open \
-                     --head "update/${{ steps.bump.outputs.after }}" \
-                     --json number --jq '.[0].number // ""')
-          echo "number=$number" >> "$GITHUB_OUTPUT"
-          if [ -n "$number" ]; then
-            echo "#$number already proposes ${{ steps.bump.outputs.after }}; nothing to do"
-          fi
-
-      - name: Open a pull request
-        id: pr
-        if: steps.bump.outputs.changed == 'true' && steps.existing.outputs.number == ''
-        uses: peter-evans/create-pull-request@v8
-        with:
-          # A PAT, not GITHUB_TOKEN: a pull request opened with the workflow's
-          # own token does not trigger workflow runs, so the build check would
-          # never start and auto-merge would wait for it forever.
-          token: ${{ secrets.UPDATE_PAT }}
-          branch: update/${{ steps.bump.outputs.after }}
-          title: "Update to ${{ steps.bump.outputs.after }}"
-          commit-message: "Update to ${{ steps.bump.outputs.after }}"
-          body: |
-            Upstream released ${{ steps.bump.outputs.after }} (was ${{ steps.bump.outputs.before }}).
-
-            pkgver and both checksums come from the GitHub release metadata.
-            The build check on this pull request is what verifies the package
-            actually builds and ships the expected files.
-
-            Merged automatically. VictoriaMetrics ships breaking changes
-            between releases, so the changelog is worth a look after the fact —
-            revert this PR if it turns out to matter.
-
-            https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v${{ steps.bump.outputs.after }}
-
-      # Queued behind the build check rather than merged outright, so nothing
-      # lands that has not been built. This needs branch protection on main
-      # requiring the "build" check, and auto-merge enabled on the repository;
-      # without them the merge fails with "Protected branch rules not
-      # configured for this branch".
-      #
-      # The PR remains as the record of what changed and the thing to revert.
-      # A required *review* would not work here: a token cannot approve the pull
-      # request it opened itself.
-      - name: Merge it once it builds
-        if: steps.pr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.UPDATE_PAT }}
-        run: |
-          gh pr merge --squash --auto --delete-branch \
-             "${{ steps.pr.outputs.pull-request-number }}"
+    uses: tehrengruber/arch-pre-built-packages/.github/workflows/pkg-repo-update.yml@v0.6
+    with:
+      version: ${{ inputs.version }}
+      release_url: https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v{version}
+      pr_note: >-
+        pkgver and both checksums come from the GitHub release metadata.
+        VictoriaMetrics ships breaking changes between releases, so the
+        changelog is worth a look after the fact.
+    secrets:
+      UPDATE_PAT: ${{ secrets.UPDATE_PAT }}

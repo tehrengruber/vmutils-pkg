@@ -47,8 +47,13 @@ matches.
 
 This runs on its own: a scheduled workflow checks for a new upstream release
 every day and opens a pull request with the bump, skipping it if a pull request
-already proposes that version. The package is built in an Arch container as a
-check on that pull request, and the pull request merges once the check is green.
+already proposes that version. The package is built in an Arch container, for
+both x86_64 and aarch64, as a check on that pull request, and the pull request
+merges once the check is green. Both workflows are thin callers of the reusable
+ones in
+[arch-pre-built-packages](https://github.com/tehrengruber/arch-pre-built-packages),
+which need an `UPDATE_PAT` secret, auto-merge enabled, and `main` protected by
+the `build / build` check.
 
 Building — rather than bumping checksums alone — is the part that matters. A
 checksum change would sail straight past an upstream that renamed its `-prod`
