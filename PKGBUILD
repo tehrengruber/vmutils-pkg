@@ -13,7 +13,7 @@
 # specific (remote write target, scrape config), so none is shipped here.
 
 pkgname=vmutils
-pkgver=1.156.0
+pkgver=1.157.0
 pkgrel=1
 pkgdesc="VictoriaMetrics utilities: vmagent, vmalert, vmauth, vmbackup, vmctl"
 arch=('x86_64' 'aarch64')
@@ -25,8 +25,8 @@ conflicts=('vmutils-bin' 'victoriametrics-agent')
 _url="https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v${pkgver}"
 source_x86_64=("vmutils-${pkgver}-amd64.tar.gz::${_url}/vmutils-linux-amd64-v${pkgver}.tar.gz")
 source_aarch64=("vmutils-${pkgver}-arm64.tar.gz::${_url}/vmutils-linux-arm64-v${pkgver}.tar.gz")
-sha256sums_x86_64=('d71f7f00e07782531000620ec6c2a9d7ec83324f364dd1f36095ab378b5fb43b')
-sha256sums_aarch64=('1a8e4ed55df2a59d5cd03056213f50d293d4fab029e38dd960597362d92cf176')
+sha256sums_x86_64=('f797ecaa5045a8f8095a813a3b3e2ef697e4086affcc174547cf559768044862')
+sha256sums_aarch64=('7043d79387fef738c687d811553c4eb3bd3251e52b912141855265de2dcd27d8')
 
 package() {
   # Upstream ships every binary with a -prod suffix.
